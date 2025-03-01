@@ -26,13 +26,13 @@ NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
 
 def fetch_top_news():
     """
-    Fetches the top 5 headlines in the 'general' category for the US, 
+    Fetches the top 5 headlines in the 'politics' category for the US, 
     optionally with language set to 'en' (though top-headlines may ignore it).
     """
     url = (
         "https://newsapi.org/v2/top-headlines?"
         "country=us&"
-        "category=general&"
+        "category=politics&"
         "language=en&"
         "pageSize=5"
     )
