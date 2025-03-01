@@ -2,7 +2,7 @@
 app.py
 
 This Streamlit web application:
-• Fetches the top 5 headlines (category=general, country=us, language=en) from News API.
+• Fetches the top 5 headlines (category=politics, country=us, language=en) from News API.
 • Displays each story's title, plus a clickable link to the original article.
 • Lets you choose one of the headlines or enter a custom scenario.
 • Provides multiple sliders (Global Cooperation, Tech Disruption, Public Sentiment, etc.).
