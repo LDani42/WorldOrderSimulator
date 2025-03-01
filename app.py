@@ -29,8 +29,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Retrieve API keys
-openai.api_key = os.getenv("OPENAI_API_KEY")
-NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
+openai.api_key = st.secrets["OPENAI_API_KEY"]
+NEWSAPI_KEY = st.secrets["NEWSAPI_KEY"]
 
 def fetch_top_news():
     """
