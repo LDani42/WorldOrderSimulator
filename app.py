@@ -130,7 +130,7 @@ but ensure to include at least:
     try:
         # Use gpt-4.5-preview model
         response = openai.ChatCompletion.create(
-            model="gpt-4.5-preview",
+            model="o1",
             messages=[{"role": "user", "content": prompt}],
             temperature=1.2,   # High for creative variety
             max_tokens=7000,   # Increase token limit significantly
