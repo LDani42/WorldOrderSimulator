@@ -1,4 +1,7 @@
 import os
+import time
+import queue
+import threading
 import openai
 import requests
 import streamlit as st
@@ -9,6 +12,11 @@ load_dotenv()
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
+
+###############################
+# 1) Default to WIDE LAYOUT   #
+###############################
+st.set_page_config(layout="wide")
 
 def fetch_top_news():
     """
@@ -42,7 +50,7 @@ def get_scenario_response_stream(
     environmental_stress: int
 ):
     """
-    Streams a GPT-4 response for either a Best or Worst Case scenario.
+    Streams a GPT-4.5-preview response for either a Best or Worst Case scenario.
     Yields chunks of content as they arrive from the API.
     """
 
@@ -62,7 +70,7 @@ def get_scenario_response_stream(
     # Enhanced prompt to ensure realism, depth, and visual cues
     prompt = f"""
 You are a geopolitical analyst with advanced degrees in political science, economics, 
-and environmental studies. You have worked with global think-tanks on forecasting. 
+and environmental studies, working with global think-tanks on forecasting. 
 Below is a news summary (or custom scenario) plus multiple parameters:
 
 (1) Global Cooperation Level (0-100)
@@ -105,7 +113,7 @@ Parameter Values:
 """.strip()
 
     try:
-        # Stream the GPT-4 completion
+        # Use gpt-4.5-preview model
         response = openai.ChatCompletion.create(
             model="gpt-4.5-preview",
             messages=[{"role": "user", "content": prompt}],
@@ -127,9 +135,44 @@ Parameter Values:
         # If there's an error, yield the error message
         yield f"\n\nError generating {scenario_type} scenario: {e}"
 
+
+###############################
+# 2) Threading for concurrency
+###############################
+def stream_scenario_in_thread(
+    out_queue: queue.Queue,
+    scenario_type: str,
+    news_text: str,
+    cooperation_level: int,
+    tech_disruption_level: int,
+    public_sentiment_level: int,
+    economic_volatility: int,
+    environmental_stress: int
+):
+    """
+    Run the streaming OpenAI call in a separate thread.
+    Place the chunks into a queue. 
+    End with None to signal completion.
+    """
+    try:
+        for chunk in get_scenario_response_stream(
+            scenario_type,
+            news_text,
+            cooperation_level,
+            tech_disruption_level,
+            public_sentiment_level,
+            economic_volatility,
+            environmental_stress
+        ):
+            out_queue.put(chunk)
+    finally:
+        # Signal that streaming is done
+        out_queue.put(None)
+
+
 def main():
-    st.title("Future Scenarios Simulator (Top US Headlines)")
-    st.markdown("**Generates two GPT-4 streaming responses (Best & Worst) for each selected headline.**")
+    st.title("Future Scenarios Simulator (Top US Headlines) — Wide Layout")
+    st.markdown("Generates two **GPT-4.5-preview** streaming responses (Best & Worst) in parallel.")
 
     # --- Fetch top news ---
     st.subheader("Top 5 US General News Stories")
@@ -192,46 +235,91 @@ def main():
 
         st.markdown("## Scenario Results")
 
-        # Create two columns for side-by-side streaming
+        # Create two columns for side-by-side presentation
         col1, col2 = st.columns(2)
 
-        # --- Best Case Streaming ---
+        # Prepare placeholders for streaming text
         with col1:
             st.markdown("### Best Case")
-            best_case_placeholder = st.empty()
-            best_text_accumulated = ""
-
-            with st.spinner("Generating BEST CASE scenario..."):
-                for chunk in get_scenario_response_stream(
-                    scenario_type="best",
-                    news_text=news_text,
-                    cooperation_level=cooperation_level,
-                    tech_disruption_level=tech_disruption_level,
-                    public_sentiment_level=public_sentiment_level,
-                    economic_volatility=economic_volatility,
-                    environmental_stress=environmental_stress
-                ):
-                    best_text_accumulated += chunk
-                    best_case_placeholder.markdown(best_text_accumulated)
-
-        # --- Worst Case Streaming ---
+            best_placeholder = st.empty()
         with col2:
             st.markdown("### Worst Case")
-            worst_case_placeholder = st.empty()
-            worst_text_accumulated = ""
+            worst_placeholder = st.empty()
 
-            with st.spinner("Generating WORST CASE scenario..."):
-                for chunk in get_scenario_response_stream(
-                    scenario_type="worst",
-                    news_text=news_text,
-                    cooperation_level=cooperation_level,
-                    tech_disruption_level=tech_disruption_level,
-                    public_sentiment_level=public_sentiment_level,
-                    economic_volatility=economic_volatility,
-                    environmental_stress=environmental_stress
-                ):
-                    worst_text_accumulated += chunk
-                    worst_case_placeholder.markdown(worst_text_accumulated)
+        # Queues to receive streamed text
+        best_queue = queue.Queue()
+        worst_queue = queue.Queue()
+
+        # Threads for concurrency
+        best_thread = threading.Thread(
+            target=stream_scenario_in_thread,
+            args=(
+                best_queue,
+                "best",
+                news_text,
+                cooperation_level,
+                tech_disruption_level,
+                public_sentiment_level,
+                economic_volatility,
+                environmental_stress
+            ),
+            daemon=True
+        )
+        worst_thread = threading.Thread(
+            target=stream_scenario_in_thread,
+            args=(
+                worst_queue,
+                "worst",
+                news_text,
+                cooperation_level,
+                tech_disruption_level,
+                public_sentiment_level,
+                economic_volatility,
+                environmental_stress
+            ),
+            daemon=True
+        )
+
+        # Start streaming threads
+        best_thread.start()
+        worst_thread.start()
+
+        best_done = False
+        worst_done = False
+        best_accumulated = ""
+        worst_accumulated = ""
+
+        # Continuously read from both queues until both are done
+        while not (best_done and worst_done):
+            # Best scenario updates
+            if not best_done:
+                try:
+                    chunk = best_queue.get_nowait()
+                    if chunk is None:
+                        best_done = True
+                    else:
+                        best_accumulated += chunk
+                        best_placeholder.markdown(best_accumulated)
+                except queue.Empty:
+                    pass  # No chunk available this loop
+
+            # Worst scenario updates
+            if not worst_done:
+                try:
+                    chunk = worst_queue.get_nowait()
+                    if chunk is None:
+                        worst_done = True
+                    else:
+                        worst_accumulated += chunk
+                        worst_placeholder.markdown(worst_accumulated)
+                except queue.Empty:
+                    pass  # No chunk available this loop
+
+            time.sleep(0.05)  # Short pause to yield control (avoid CPU spinning)
+
+        # Just to be safe, join threads (they should already be done)
+        best_thread.join()
+        worst_thread.join()
 
         st.markdown("---")
         st.caption(
