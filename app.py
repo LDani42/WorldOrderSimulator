@@ -132,8 +132,9 @@ but ensure to include at least:
         response = openai.ChatCompletion.create(
             model="o1",
             messages=[{"role": "user", "content": prompt}],
-            temperature=1.2,   # High for creative variety
-            max_completion_tokens=7000,   # Increase token limit significantly
+            reasoning_effort="medium",   # High for creative variety
+            #temperature=1.2,   # High for creative variety
+            max_completion_tokens=15000,   # Increase token limit significantly
             top_p=1.0,
             frequency_penalty=0.0,
             presence_penalty=0.0,
