@@ -13,9 +13,9 @@ load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
 
-###############################
-# 1) Default to WIDE LAYOUT   #
-###############################
+###############################################################################
+# 1) Default to WIDE LAYOUT and rename the app to something more engaging
+###############################################################################
 st.set_page_config(layout="wide")
 
 def fetch_top_news():
@@ -40,6 +40,9 @@ def fetch_top_news():
     articles = data.get("articles", [])
     return articles, None
 
+###############################################################################
+# 2) Enhanced Prompt with the 8-step scenario planning, referencing formatting
+###############################################################################
 def get_scenario_response_stream(
     scenario_type: str,
     news_text: str,
@@ -54,6 +57,7 @@ def get_scenario_response_stream(
     Yields chunks of content as they arrive from the API.
     """
 
+    # Distinguish best/worst scenario instructions
     if scenario_type.lower() == "best":
         scenario_instruction = (
             "Focus on cooperative, optimistic paths where thoughtful diplomacy, "
@@ -67,11 +71,11 @@ def get_scenario_response_stream(
         )
         scenario_title = "WORST CASE SCENARIO"
 
-    # Enhanced prompt to ensure realism, depth, and visual cues
+    # Incorporate your 8-step logic guidance + structured, visually rich output
     prompt = f"""
-You are a geopolitical analyst with advanced degrees in political science, economics, 
-and environmental studies, working with global think-tanks on forecasting. 
-Below is a news summary (or custom scenario) plus multiple parameters:
+You are an advanced political scientist and policy analyst specialized in scenario planning,
+systems thinking, and strategic wargaming. We have a 'trigger event' (the news headline or 
+custom scenario), and the following parameters:
 
 (1) Global Cooperation Level (0-100)
 (2) Tech Disruption Level (0-100)
@@ -80,31 +84,42 @@ Below is a news summary (or custom scenario) plus multiple parameters:
 (5) Environmental Stress (0-100)
 
 **Important Guidance**:
-- Provide a {scenario_title} spanning the next 5 years, divided into:
+- Provide a **{scenario_title}** spanning the next 5 years, divided into:
   - Short-term (6-12 months)
   - Mid-term (1-3 years)
   - Long-term (3-5 years)
-- Use realistic, data-informed reasoning based on the scenario. 
-  For instance, if this is a local sports story, do NOT escalate it to global upheaval.
-- Show cause-effect or domino-effect reasoning, referencing relevant stakeholders 
-  (nations, leaders, organizations) only if it makes sense in the specific context.
-- Where appropriate, include ASCII-based visual cues (e.g., tree diagrams, flow charts)
-  to illustrate causal or domino effects.
-- Provide historical analogies if they genuinely fit.
+- Incorporate the following structured framework, aligning with scenario planning 
+  and systems thinking:
+  1. Define the Scope & Trigger Event
+  2. Establish the Context
+  3. Identify Key Actors & Their Relationships
+  4. Determine System Structure & Dependencies
+  5. Specify Simulation Rules & Propagation Mechanisms
+  6. Develop Possible Scenarios (Here: the specific {scenario_title})
+  7. Analyze Outcomes & Policy Implications
+  8. Communicate Findings & Next Steps
+- Make the result visually appealing and highly readable using:
+  - Headers (#, ##, ###)
+  - Subheadings
+  - Bullet points, numbered lists
+  - Tables (Markdown tables)
+  - ASCII art/diagrams (for causal links, flows, or relationships)
 - {scenario_instruction}
 
-**Structure your output** as:
-**{scenario_title}**:
-(A) Short-term (6-12 months):
-(B) Mid-term (1-3 years):
-(C) Long-term (3-5 years):
-(D) Historical Analogies (if any):
-(E) Visual Diagram (if helpful, in ASCII form)
+**Structure your final output** as you see fit (you may use headings that correspond to the 8 steps),
+but ensure to include at least:
+1. A top-level heading for {scenario_title} (with a brief intro).
+2. A breakdown by time horizon:
+   - Short-term (6-12 months)
+   - Mid-term (1-3 years)
+   - Long-term (3-5 years)
+3. Historical or theoretical analogies if relevant.
+4. One or more ASCII diagrams or tables if relevant to illustrate important points.
 
-News Text:
+**News Text / Trigger Event**:
 \"\"\"{news_text}\"\"\"
 
-Parameter Values:
+**Parameter Values**:
 - Global Cooperation Level: {cooperation_level}
 - Tech Disruption Level: {tech_disruption_level}
 - Public Sentiment Level: {public_sentiment_level}
@@ -132,13 +147,11 @@ Parameter Values:
                 yield chunk_content
 
     except Exception as e:
-        # If there's an error, yield the error message
         yield f"\n\nError generating {scenario_type} scenario: {e}"
 
-
-###############################
-# 2) Threading for concurrency
-###############################
+###############################################################################
+# 3) Threading & Queues for concurrent streaming of Best & Worst
+###############################################################################
 def stream_scenario_in_thread(
     out_queue: queue.Queue,
     scenario_type: str,
@@ -169,10 +182,25 @@ def stream_scenario_in_thread(
         # Signal that streaming is done
         out_queue.put(None)
 
-
+###############################################################################
+# 4) Main Streamlit App
+###############################################################################
 def main():
-    st.title("Future Scenarios Simulator (Top US Headlines) — Wide Layout")
-    st.markdown("Generates two **GPT-4.5-preview** streaming responses (Best & Worst) in parallel.")
+    # Updated title & introduction
+    st.title("Crisis Cascade Simulator")
+    st.markdown(
+        """
+        **Welcome to the Crisis Cascade Simulator!**  
+        This tool helps you explore how a chosen “trigger event” (headline or custom scenario) 
+        might unfold over the next five years. Leveraging scenario planning, systems thinking, 
+        and strategic wargaming techniques, we’ll generate two parallel forecasts:  
+        - **Best Case Scenario**  
+        - **Worst Case Scenario**  
+
+        Each scenario is streamed in real-time side-by-side, giving you a quick comparative 
+        view of potential futures. Let’s dive in!
+        """
+    )
 
     # --- Fetch top news ---
     st.subheader("Top 5 US General News Stories")
@@ -203,6 +231,7 @@ def main():
         "link": ""
     }
 
+    # Selection radio
     selection = st.radio("Select a news story or custom scenario:", list(story_options.keys()))
     selected_story_data = story_options[selection]
 
@@ -228,6 +257,7 @@ def main():
     economic_volatility = st.slider("Economic Volatility", 0, 100, 50)
     environmental_stress = st.slider("Environmental Stress", 0, 100, 50)
 
+    # Button to generate scenarios
     if st.button("Generate Best & Worst Scenarios"):
         if not news_text.strip():
             st.error("Please enter or select a scenario before generating.")
@@ -240,10 +270,10 @@ def main():
 
         # Prepare placeholders for streaming text
         with col1:
-            st.markdown("### Best Case")
+            st.markdown("### Best Case Scenario")
             best_placeholder = st.empty()
         with col2:
-            st.markdown("### Worst Case")
+            st.markdown("### Worst Case Scenario")
             worst_placeholder = st.empty()
 
         # Queues to receive streamed text
@@ -315,9 +345,9 @@ def main():
                 except queue.Empty:
                     pass  # No chunk available this loop
 
-            time.sleep(0.05)  # Short pause to yield control (avoid CPU spinning)
+            time.sleep(0.05)  # short pause to avoid busy waiting
 
-        # Just to be safe, join threads (they should already be done)
+        # Join threads to ensure they're finished
         best_thread.join()
         worst_thread.join()
 
