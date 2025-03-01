@@ -133,7 +133,7 @@ but ensure to include at least:
             model="o1",
             messages=[{"role": "user", "content": prompt}],
             temperature=1.2,   # High for creative variety
-            max_tokens=7000,   # Increase token limit significantly
+            max_completion_tokens=7000,   # Increase token limit significantly
             top_p=1.0,
             frequency_penalty=0.0,
             presence_penalty=0.0,
