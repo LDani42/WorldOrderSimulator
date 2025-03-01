@@ -107,7 +107,7 @@ Parameter Values:
     try:
         # Stream the GPT-4 completion
         response = openai.ChatCompletion.create(
-            model="gpt-4",
+            model="gpt-4.5-preview",
             messages=[{"role": "user", "content": prompt}],
             temperature=1.2,   # High for creative variety
             max_tokens=7000,   # Increase token limit significantly
