@@ -2,7 +2,7 @@
 app.py
 
 This Streamlit web application:
-• Fetches the top 5 politics-related news stories from News API.
+• Fetches the top 5 headlines (category=general, country=us, language=en) from News API.
 • Displays each story's title, plus a clickable link to the original article.
 • Lets you choose one of the headlines or enter a custom scenario.
 • Provides multiple sliders (Global Cooperation, Tech Disruption, Public Sentiment, etc.).
@@ -26,11 +26,16 @@ NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
 
 def fetch_top_news():
     """
-    Fetches the top 5 politics-related news stories from the News API.
-    Returns:
-        (articles, error): articles = list of article dicts, error = string or None
+    Fetches the top 5 headlines in the 'general' category for the US, 
+    optionally with language set to 'en' (though top-headlines may ignore it).
     """
-    url = "https://newsapi.org/v2/everything?q=politics&language=en&pageSize=5"
+    url = (
+        "https://newsapi.org/v2/top-headlines?"
+        "country=us&"
+        "category=general&"
+        "language=en&"
+        "pageSize=5"
+    )
     headers = {"X-Api-Key": NEWSAPI_KEY}
     
     response = requests.get(url, headers=headers)
@@ -69,7 +74,7 @@ def get_scenario_response(
 
     prompt = f"""
 You are a geopolitical analyst with expertise in game theory, historical precedents,
-and environmental/economic/social factors. Below is a political news summary (or custom scenario) 
+and environmental/economic/social factors. Below is a news summary (or custom scenario) 
 plus multiple parameters:
 
 (1) Global Cooperation Level (0-100)
@@ -122,33 +127,25 @@ Parameter Values:
     return content
 
 def main():
-    st.title("Future Scenarios Simulator")
-    st.markdown("**Generates two separate GPT-4 prompts (Best & Worst) and displays side by side.**")
+    st.title("Future Scenarios Simulator (Top US Headlines)")
+    st.markdown("**Generates two separate GPT-4 prompts (Best & Worst) for each selected headline.**")
 
     # --- Fetch top news ---
-    st.subheader("Top 5 Current Politics News Stories")
+    st.subheader("Top 5 US General News Stories")
     articles, error = fetch_top_news()
     if error:
         st.error(f"Failed to fetch news stories: {error}")
         st.stop()
 
-    # Build story selection
-    # We'll store a dict where each key is the radio label,
-    # and the value is another dict with 'text' and 'url'.
+    # Build story selection dictionary
     story_options = {}
-    
     for idx, article in enumerate(articles):
         title = article.get("title", "No Title")
         description = article.get("description", "No Description")
         content = article.get("content", "") or ""
         article_url = article.get("url", "") or ""
         
-        # Combine the textual fields into one for GPT.
-        combined_text = (
-            f"{title}\n\nDescription: {description}\n\nContent: {content}"
-        )
-        
-        # We'll show "Article {idx+1}: {title}" in the radio button.
+        combined_text = f"{title}\n\nDescription: {description}\n\nContent: {content}"
         label = f"Article {idx+1}: {title}"
         
         story_options[label] = {
@@ -156,25 +153,22 @@ def main():
             "link": article_url
         }
 
-    # Add a custom scenario option.
+    # Add a custom scenario option
     story_options["Custom Scenario"] = {
         "text": "Enter your own custom scenario below.",
-        "link": ""  # No link for custom scenario
+        "link": ""
     }
 
-    selection = st.radio("Select a politics news story or custom scenario:", list(story_options.keys()))
-    
-    # Display the link for the selected article (if any).
+    selection = st.radio("Select a news story or custom scenario:", list(story_options.keys()))
     selected_story_data = story_options[selection]
-    
+
     if selection == "Custom Scenario":
         custom_text = st.text_area("Enter your custom scenario:", height=150)
         news_text = custom_text
     else:
-        # Show a clickable link to the news article (if there's a URL)
         if selected_story_data["link"]:
             st.markdown(
-                f"[**Read Full Article**]({selected_story_data['link']})",
+                f'<a href="{selected_story_data["link"]}" target="_blank">Read Full Article</a>',
                 unsafe_allow_html=True
             )
         news_text = selected_story_data["text"]
