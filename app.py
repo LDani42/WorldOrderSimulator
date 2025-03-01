@@ -1,22 +1,15 @@
 """
 app.py
 
-A Streamlit web application that:
+This Streamlit web application:
 • Fetches the top 5 politics-related news stories from News API.
+• Displays each story's title, plus a clickable link to the original article.
 • Lets you choose one of the headlines or enter a custom scenario.
 • Provides multiple sliders (Global Cooperation, Tech Disruption, Public Sentiment, etc.).
 • Makes TWO separate calls to GPT-4 (new openai interface):
    1) A "Best Case" scenario
    2) A "Worst Case" scenario
 • Displays both scenarios side by side.
-
-Environment Variables:
-- OPENAI_API_KEY
-- NEWSAPI_KEY
-
-Usage:
-1. Create a .env or set environment variables for the keys.
-2. streamlit run app.py
 """
 
 import os
@@ -25,18 +18,17 @@ import requests
 import streamlit as st
 from dotenv import load_dotenv
 
-# Load environment variables from .env (optional if you're using st.secrets or a hosting env)
+# Load environment variables
 load_dotenv()
 
-# Retrieve API keys
-openai.api_key = st.secrets["OPENAI_API_KEY"]
-NEWSAPI_KEY = st.secrets["NEWSAPI_KEY"]
+openai.api_key = os.getenv("OPENAI_API_KEY")
+NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
 
 def fetch_top_news():
     """
-    Fetches the top 5 politics-related news stories from NewsAPI using 'everything' endpoint.
+    Fetches the top 5 politics-related news stories from the News API.
     Returns:
-        (articles, error): articles = list of article dictionaries, error = string or None
+        (articles, error): articles = list of article dicts, error = string or None
     """
     url = "https://newsapi.org/v2/everything?q=politics&language=en&pageSize=5"
     headers = {"X-Api-Key": NEWSAPI_KEY}
@@ -60,14 +52,6 @@ def get_scenario_response(
 ) -> str:
     """
     Makes a call to GPT-4 to generate a best or worst case scenario.
-
-    Args:
-        scenario_type (str): "best" or "worst"
-        news_text (str): The chosen news scenario or custom scenario text
-        cooperation_level, tech_disruption_level, etc.: integer sliders (0-100)
-
-    Returns:
-        content (str): GPT-4's response text
     """
 
     if scenario_type.lower() == "best":
@@ -76,14 +60,13 @@ def get_scenario_response(
             "strategic foresight, or altruistic motives lead to positive outcomes."
         )
         scenario_title = "BEST CASE SCENARIO"
-    else:  # "worst"
+    else:
         scenario_instruction = (
             "Focus on conflict-driven, opportunistic, or poorly managed paths "
             "where self-interest escalates tensions and leads to negative outcomes."
         )
         scenario_title = "WORST CASE SCENARIO"
 
-    # Build the prompt
     prompt = f"""
 You are a geopolitical analyst with expertise in game theory, historical precedents,
 and environmental/economic/social factors. Below is a political news summary (or custom scenario) 
@@ -149,23 +132,52 @@ def main():
         st.error(f"Failed to fetch news stories: {error}")
         st.stop()
 
-    # Build a dictionary for story selection
+    # Build story selection
+    # We'll store a dict where each key is the radio label,
+    # and the value is another dict with 'text' and 'url'.
     story_options = {}
+    
     for idx, article in enumerate(articles):
         title = article.get("title", "No Title")
         description = article.get("description", "No Description")
         content = article.get("content", "") or ""
-        combined_text = f"{title}\n\nDescription: {description}\n\nContent: {content}"
-        story_options[f"Article {idx+1}: {title}"] = combined_text
+        article_url = article.get("url", "") or ""
+        
+        # Combine the textual fields into one for GPT.
+        combined_text = (
+            f"{title}\n\nDescription: {description}\n\nContent: {content}"
+        )
+        
+        # We'll show "Article {idx+1}: {title}" in the radio button.
+        label = f"Article {idx+1}: {title}"
+        
+        story_options[label] = {
+            "text": combined_text,
+            "link": article_url
+        }
 
-    story_options["Custom Scenario"] = "Enter your own custom scenario below."
+    # Add a custom scenario option.
+    story_options["Custom Scenario"] = {
+        "text": "Enter your own custom scenario below.",
+        "link": ""  # No link for custom scenario
+    }
 
     selection = st.radio("Select a politics news story or custom scenario:", list(story_options.keys()))
+    
+    # Display the link for the selected article (if any).
+    selected_story_data = story_options[selection]
+    
     if selection == "Custom Scenario":
         custom_text = st.text_area("Enter your custom scenario:", height=150)
         news_text = custom_text
     else:
-        news_text = story_options[selection]
+        # Show a clickable link to the news article (if there's a URL)
+        if selected_story_data["link"]:
+            st.markdown(
+                f"[**Read Full Article**]({selected_story_data['link']})",
+                unsafe_allow_html=True
+            )
+        news_text = selected_story_data["text"]
 
     st.markdown("---")
 
@@ -183,7 +195,7 @@ def main():
             return
 
         with st.spinner("Generating scenarios..."):
-            # Call for BEST CASE
+            # BEST CASE
             best_case_output = get_scenario_response(
                 scenario_type="best",
                 news_text=news_text,
@@ -194,7 +206,7 @@ def main():
                 environmental_stress=environmental_stress
             )
 
-            # Call for WORST CASE
+            # WORST CASE
             worst_case_output = get_scenario_response(
                 scenario_type="worst",
                 news_text=news_text,
