@@ -1,3 +1,17 @@
+"""
+app.py
+
+This Streamlit web application:
+• Fetches the top 5 headlines (category=general, country=us, language=en) from News API.
+• Displays each story's title, plus a clickable link to the original article.
+• Lets you choose one of the headlines or enter a custom scenario.
+• Provides multiple sliders (Global Cooperation, Tech Disruption, Public Sentiment, etc.).
+• Makes TWO separate calls to GPT-4 (new openai interface):
+   1) A "Best Case" scenario
+   2) A "Worst Case" scenario
+• Displays both scenarios side by side.
+"""
+
 import os
 import openai
 import requests
@@ -12,8 +26,8 @@ NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
 
 def fetch_top_news():
     """
-    Fetches the top 5 headlines in the 'general' category for the US,
-    with language='en' (though top-headlines may ignore it).
+    Fetches the top 5 headlines in the 'general' category for the US, 
+    optionally with language set to 'en' (though top-headlines may ignore it).
     """
     url = (
         "https://newsapi.org/v2/top-headlines?"
@@ -32,7 +46,7 @@ def fetch_top_news():
     articles = data.get("articles", [])
     return articles, None
 
-def get_scenario_response_stream(
+def get_scenario_response(
     scenario_type: str,
     news_text: str,
     cooperation_level: int,
@@ -40,15 +54,14 @@ def get_scenario_response_stream(
     public_sentiment_level: int,
     economic_volatility: int,
     environmental_stress: int
-):
+) -> str:
     """
-    Streams a GPT-4 response for either a Best or Worst Case scenario.
-    Yields chunks of content as they arrive from the API.
+    Makes a call to GPT-4 to generate a best or worst case scenario.
     """
 
     if scenario_type.lower() == "best":
         scenario_instruction = (
-            "Focus on cooperative, optimistic paths where thoughtful diplomacy, "
+            "Focus on cooperative, optimistic paths where diplomatic efforts, "
             "strategic foresight, or altruistic motives lead to positive outcomes."
         )
         scenario_title = "BEST CASE SCENARIO"
@@ -59,11 +72,10 @@ def get_scenario_response_stream(
         )
         scenario_title = "WORST CASE SCENARIO"
 
-    # Enhanced prompt to ensure realism, depth, and visual cues
     prompt = f"""
-You are a geopolitical analyst with advanced degrees in political science, economics, 
-and environmental studies. You have worked with global think-tanks on forecasting. 
-Below is a news summary (or custom scenario) plus multiple parameters:
+You are a geopolitical analyst with expertise in game theory, historical precedents,
+and environmental/economic/social factors. Below is a news summary (or custom scenario) 
+plus multiple parameters:
 
 (1) Global Cooperation Level (0-100)
 (2) Tech Disruption Level (0-100)
@@ -71,27 +83,21 @@ Below is a news summary (or custom scenario) plus multiple parameters:
 (4) Economic Volatility (0-100)
 (5) Environmental Stress (0-100)
 
-**Important Guidance**:
-- Provide a {scenario_title} spanning the next 5 years, divided into:
+**Your task**:
+- Generate a **{scenario_title}** spanning the next 5 years, divided into:
   - Short-term (6-12 months)
   - Mid-term (1-3 years)
   - Long-term (3-5 years)
-- Use realistic, data-informed reasoning based on the scenario. 
-  For instance, if this is a local sports story, do NOT escalate it to global upheaval.
-- Show cause-effect or domino-effect reasoning, referencing relevant stakeholders 
-  (nations, leaders, organizations) only if it makes sense in the specific context.
-- Where appropriate, include ASCII-based visual cues (e.g., tree diagrams, flow charts)
-  to illustrate causal or domino effects.
-- Provide historical analogies if they genuinely fit.
+- Show cause-effect (domino effect) reasoning, referencing relevant stakeholders (nations, leaders, organizations).
+- Provide historical analogies if appropriate.
 - {scenario_instruction}
 
-**Structure your output** as:
+Structure the output as:
 **{scenario_title}**:
-(A) Short-term (6-12 months):
-(B) Mid-term (1-3 years):
-(C) Long-term (3-5 years):
-(D) Historical Analogies (if any):
-(E) Visual Diagram (if helpful, in ASCII form)
+(A) Short-term:
+(B) Mid-term:
+(C) Long-term:
+(D) Historical Analogies (if any)
 
 News Text:
 \"\"\"{news_text}\"\"\"
@@ -102,34 +108,27 @@ Parameter Values:
 - Public Sentiment Level: {public_sentiment_level}
 - Economic Volatility: {economic_volatility}
 - Environmental Stress: {environmental_stress}
-""".strip()
+"""
 
     try:
-        # Stream the GPT-4 completion
         response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[{"role": "user", "content": prompt}],
-            temperature=1.2,   # High for creative variety
-            max_tokens=7000,   # Increase token limit significantly
+            temperature=1.2,   # High for more creativity
+            max_tokens=2000,
             top_p=1.0,
             frequency_penalty=0.0,
-            presence_penalty=0.0,
-            stream=True        # Enable streaming
+            presence_penalty=0.0
         )
-        
-        # Yield the content chunks as they arrive
-        for chunk in response:
-            chunk_content = chunk["choices"][0].get("delta", {}).get("content", "")
-            if chunk_content:
-                yield chunk_content
-
+        content = response.choices[0].message["content"].strip()
     except Exception as e:
-        # If there's an error, yield the error message
-        yield f"\n\nError generating {scenario_type} scenario: {e}"
+        content = f"Error generating {scenario_type} scenario: {e}"
+
+    return content
 
 def main():
     st.title("Future Scenarios Simulator (Top US Headlines)")
-    st.markdown("**Generates two GPT-4 streaming responses (Best & Worst) for each selected headline.**")
+    st.markdown("**Gets the most recent News Stories and Reasons (Best & Worst) Scenarios for their Impact on the Global Order.**")
 
     # --- Fetch top news ---
     st.subheader("Top 5 US General News Stories")
@@ -163,7 +162,6 @@ def main():
     selection = st.radio("Select a news story or custom scenario:", list(story_options.keys()))
     selected_story_data = story_options[selection]
 
-    # If custom scenario is selected, let user input text
     if selection == "Custom Scenario":
         custom_text = st.text_area("Enter your custom scenario:", height=150)
         news_text = custom_text
@@ -190,54 +188,41 @@ def main():
             st.error("Please enter or select a scenario before generating.")
             return
 
+        with st.spinner("Generating scenarios..."):
+            # BEST CASE
+            best_case_output = get_scenario_response(
+                scenario_type="best",
+                news_text=news_text,
+                cooperation_level=cooperation_level,
+                tech_disruption_level=tech_disruption_level,
+                public_sentiment_level=public_sentiment_level,
+                economic_volatility=economic_volatility,
+                environmental_stress=environmental_stress
+            )
+
+            # WORST CASE
+            worst_case_output = get_scenario_response(
+                scenario_type="worst",
+                news_text=news_text,
+                cooperation_level=cooperation_level,
+                tech_disruption_level=tech_disruption_level,
+                public_sentiment_level=public_sentiment_level,
+                economic_volatility=economic_volatility,
+                environmental_stress=environmental_stress
+            )
+
+        # Display side by side
         st.markdown("## Scenario Results")
-
-        # Create two columns for side-by-side streaming
         col1, col2 = st.columns(2)
-
-        # --- Best Case Streaming ---
         with col1:
             st.markdown("### Best Case")
-            best_case_placeholder = st.empty()
-            best_text_accumulated = ""
-
-            with st.spinner("Generating BEST CASE scenario..."):
-                for chunk in get_scenario_response_stream(
-                    scenario_type="best",
-                    news_text=news_text,
-                    cooperation_level=cooperation_level,
-                    tech_disruption_level=tech_disruption_level,
-                    public_sentiment_level=public_sentiment_level,
-                    economic_volatility=economic_volatility,
-                    environmental_stress=environmental_stress
-                ):
-                    best_text_accumulated += chunk
-                    best_case_placeholder.markdown(best_text_accumulated)
-
-        # --- Worst Case Streaming ---
+            st.markdown(best_case_output)
         with col2:
             st.markdown("### Worst Case")
-            worst_case_placeholder = st.empty()
-            worst_text_accumulated = ""
-
-            with st.spinner("Generating WORST CASE scenario..."):
-                for chunk in get_scenario_response_stream(
-                    scenario_type="worst",
-                    news_text=news_text,
-                    cooperation_level=cooperation_level,
-                    tech_disruption_level=tech_disruption_level,
-                    public_sentiment_level=public_sentiment_level,
-                    economic_volatility=economic_volatility,
-                    environmental_stress=environmental_stress
-                ):
-                    worst_text_accumulated += chunk
-                    worst_case_placeholder.markdown(worst_text_accumulated)
+            st.markdown(worst_case_output)
 
         st.markdown("---")
-        st.caption(
-            "These scenarios are hypothetical and generated by AI. "
-            "Real events may differ. Source: [News API](https://newsapi.org)."
-        )
+        st.caption("These are hypothetical scenarios generated by AI. Real events may differ. Source: [News API](https://newsapi.org).")
 
 if __name__ == "__main__":
     main()
