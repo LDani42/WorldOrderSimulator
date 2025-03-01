@@ -139,7 +139,7 @@ Parameter Values:
     return content
 
 def main():
-    st.title("Future Scenarios Simulator (Migrated to New OpenAI Interface)")
+    st.title("Future Scenarios Simulator")
     st.markdown("**Generates two separate GPT-4 prompts (Best & Worst) and displays side by side.**")
 
     # --- Fetch top news ---
